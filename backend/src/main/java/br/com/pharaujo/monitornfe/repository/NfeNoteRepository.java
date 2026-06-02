@@ -18,7 +18,7 @@ public interface NfeNoteRepository extends JpaRepository<NfeNote, Long> {
     @Query("""
         select n from NfeNote n
         where (:status is null or n.status = :status)
-          and (:emitenteNome is null or lower(n.emitenteNome) like lower(concat('%', :emitenteNome, '%')))
+          and (cast(:emitenteNome as string) is null or lower(n.emitenteNome) like lower(concat('%', cast(:emitenteNome as string), '%')))
           and (:chave is null or n.chaveAcesso = :chave)
           and (:dataInicial is null or n.dataEmissao >= :dataInicial)
           and (:dataFinal is null or n.dataEmissao < :dataFinal)
