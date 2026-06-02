@@ -37,7 +37,7 @@ public class ExportService {
             try (ZipOutputStream zip = new ZipOutputStream(output)) {
                 LocalDateTime start = request.dataInicial() == null ? null : request.dataInicial().atStartOfDay();
                 LocalDateTime end = request.dataFinal() == null ? null : request.dataFinal().plusDays(1).atStartOfDay();
-                for (NfeNote note : nfeNoteRepository.search(request.status(), request.emitenteNome(), null, start, end, PageRequest.of(0, 500)).getContent()) {
+                for (NfeNote note : nfeNoteRepository.search(request.status() == null ? null : request.status().name(), request.emitenteNome(), null, start, end, PageRequest.of(0, 500)).getContent()) {
                     String filePath = type == ExportType.XML ? note.getXmlStoragePath() : note.getPdfStoragePath();
                     if (filePath == null || filePath.isBlank()) {
                         continue;
