@@ -17,20 +17,20 @@ public interface NfeNoteRepository extends JpaRepository<NfeNote, Long> {
 
     @Query(value = """
         select * from nfe_notes n
-        where (:status is null or n.status = cast(:status as varchar))
-          and (:emitenteNome is null or lower(n.emitente_nome) like lower(concat('%', cast(:emitenteNome as varchar), '%')))
-          and (:chave is null or n.chave_acesso = cast(:chave as varchar))
-          and (:dataInicial is null or n.data_emissao >= :dataInicial)
-          and (:dataFinal is null or n.data_emissao < :dataFinal)
+        where (cast(:status as varchar) is null or n.status = cast(:status as varchar))
+          and (cast(:emitenteNome as varchar) is null or lower(n.emitente_nome) like lower(concat('%', cast(:emitenteNome as varchar), '%')))
+          and (cast(:chave as varchar) is null or n.chave_acesso = cast(:chave as varchar))
+          and (cast(:dataInicial as timestamp) is null or n.data_emissao >= cast(:dataInicial as timestamp))
+          and (cast(:dataFinal as timestamp) is null or n.data_emissao < cast(:dataFinal as timestamp))
         order by n.data_emissao desc
         """,
         countQuery = """
         select count(*) from nfe_notes n
-        where (:status is null or n.status = cast(:status as varchar))
-          and (:emitenteNome is null or lower(n.emitente_nome) like lower(concat('%', cast(:emitenteNome as varchar), '%')))
-          and (:chave is null or n.chave_acesso = cast(:chave as varchar))
-          and (:dataInicial is null or n.data_emissao >= :dataInicial)
-          and (:dataFinal is null or n.data_emissao < :dataFinal)
+        where (cast(:status as varchar) is null or n.status = cast(:status as varchar))
+          and (cast(:emitenteNome as varchar) is null or lower(n.emitente_nome) like lower(concat('%', cast(:emitenteNome as varchar), '%')))
+          and (cast(:chave as varchar) is null or n.chave_acesso = cast(:chave as varchar))
+          and (cast(:dataInicial as timestamp) is null or n.data_emissao >= cast(:dataInicial as timestamp))
+          and (cast(:dataFinal as timestamp) is null or n.data_emissao < cast(:dataFinal as timestamp))
         """,
         nativeQuery = true)
     Page<NfeNote> search(
