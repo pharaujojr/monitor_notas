@@ -31,7 +31,7 @@ public class NoteQueryService {
         LocalDateTime start = filter.dataInicial() == null ? null : filter.dataInicial().atStartOfDay();
         LocalDateTime end = filter.dataFinal() == null ? null : filter.dataFinal().plusDays(1).atStartOfDay();
         return nfeNoteRepository.search(
-            filter.status(),
+            filter.status() == null ? null : filter.status().name(),
             blankToNull(filter.emitenteNome()),
             blankToNull(filter.chave()),
             start,

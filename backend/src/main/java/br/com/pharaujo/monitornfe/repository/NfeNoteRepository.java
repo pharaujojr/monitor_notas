@@ -15,17 +15,26 @@ public interface NfeNoteRepository extends JpaRepository<NfeNote, Long> {
 
     Optional<NfeNote> findByChaveAcesso(String chaveAcesso);
 
-    @Query("""
-        select n from NfeNote n
-        where (:status is null or n.status = :status)
-          and (cast(:emitenteNome as string) is null or lower(n.emitenteNome) like lower(concat('%', cast(:emitenteNome as string), '%')))
-          and (:chave is null or n.chaveAcesso = :chave)
-          and (:dataInicial is null or n.dataEmissao >= :dataInicial)
-          and (:dataFinal is null or n.dataEmissao < :dataFinal)
-        order by n.dataEmissao desc
-        """)
+    @Query(value = """
+        select * from nfe_notes n
+        where (:status is null or n.status = cast(:status as varchar))
+          and (:emitenteNome is null or lower(n.emitente_nome) like lower(concat('%', cast(:emitenteNome as varchar), '%')))
+          and (:chave is null or n.chave_acesso = cast(:chave as varchar))
+          and (:dataInicial is null or n.data_emissao >= :dataInicial)
+          and (:dataFinal is null or n.data_emissao < :dataFinal)
+        order by n.data_emissao desc
+        """,
+        countQuery = """
+        select count(*) from nfe_notes n
+        where (:status is null or n.status = cast(:status as varchar))
+          and (:emitenteNome is null or lower(n.emitente_nome) like lower(concat('%', cast(:emitenteNome as varchar), '%')))
+          and (:chave is null or n.chave_acesso = cast(:chave as varchar))
+          and (:dataInicial is null or n.data_emissao >= :dataInicial)
+          and (:dataFinal is null or n.data_emissao < :dataFinal)
+        """,
+        nativeQuery = true)
     Page<NfeNote> search(
-        @Param("status") NfeStatus status,
+        @Param("status") String status,
         @Param("emitenteNome") String emitenteNome,
         @Param("chave") String chave,
         @Param("dataInicial") LocalDateTime dataInicial,

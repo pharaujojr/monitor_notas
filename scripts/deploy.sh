@@ -137,7 +137,7 @@ ssh "$SSH_HOST" "set -e
     git reset --hard origin/main >/dev/null
     REMOTE_SHA=\$(git rev-parse HEAD)
     echo '   commit no servidor: '\$REMOTE_SHA
-    sudo docker compose up -d --build --remove-orphans
+    sudo docker compose up -d --build --remove-orphans --force-recreate
 "
 
 # -------- 5) verifica SHA --------
