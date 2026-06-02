@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SSH_HOST="${SSH_HOST:-seu-servidor}"
+SSH_USER="${SSH_USER:-seu-usuario}"
+REMOTE_DIR="${REMOTE_DIR:-/opt/monitor_notas}"
+BRANCH="${BRANCH:-main}"
+
+echo "Deploy em ${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}"
+
+ssh "${SSH_USER}@${SSH_HOST}" "mkdir -p '${REMOTE_DIR}'"
+
+if ssh "${SSH_USER}@${SSH_HOST}" "[ -d '${REMOTE_DIR}/.git' ]"; then
+  ssh "${SSH_USER}@${SSH_HOST}" "cd '${REMOTE_DIR}' && git fetch origin '${BRANCH}' && git checkout '${BRANCH}' && git pull --ff-only origin '${BRANCH}'"
+else
+  ssh "${SSH_USER}@${SSH_HOST}" "git clone --branch '${BRANCH}' 'git@github.com:pharaujojr/monitor_notas.git' '${REMOTE_DIR}'"
+fi
+
+ssh "${SSH_USER}@${SSH_HOST}" "cd '${REMOTE_DIR}' && test -f .env || cp .env.example .env"
+ssh "${SSH_USER}@${SSH_HOST}" "cd '${REMOTE_DIR}' && docker compose up -d --build"
+ssh "${SSH_USER}@${SSH_HOST}" "cd '${REMOTE_DIR}' && docker compose ps"
