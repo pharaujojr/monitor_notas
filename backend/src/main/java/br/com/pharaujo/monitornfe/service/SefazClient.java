@@ -55,10 +55,20 @@ public class SefazClient {
             // pastaSchemas null: distribuicaoDFe é consulta, não assina nem valida XML local
             ConfiguracoesNfe configuracoes = ConfiguracoesNfe.criarConfiguracoes(estado, ambiente, certificado, null);
 
-            return Nfe.distribuicaoDfe(configuracoes, PessoaEnum.JURIDICA, config.getCnpj(), ConsultaDFeEnum.NSU, ultNsu);
+            // o schema da SEFAZ exige o NSU com 15 dígitos e zeros à esquerda
+            String nsu = String.format("%015d", parseNsu(ultNsu));
+            return Nfe.distribuicaoDfe(configuracoes, PessoaEnum.JURIDICA, config.getCnpj(), ConsultaDFeEnum.NSU, nsu);
         } catch (Exception exception) {
             log.error("Falha na consulta DistribuicaoDFe (ultNSU={}): {}", ultNsu, exception.getMessage());
             throw new SefazIntegrationException("Falha na consulta DistribuicaoDFe: " + exception.getMessage(), exception);
+        }
+    }
+
+    private long parseNsu(String value) {
+        try {
+            return Long.parseLong(value == null ? "0" : value.trim());
+        } catch (NumberFormatException exception) {
+            return 0L;
         }
     }
 }
