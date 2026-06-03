@@ -126,8 +126,14 @@ public class SefazDistributionService {
                 }
             } else {
                 // 137 (nada novo), 656 (consumo indevido) ou erro: para o laço
+                // ⚠️ FIX: sempre usar respUltNsu (valor que SEFAZ retornou), não ultNsu (valor tentado)
+                // Isso garante sincronização correta em coexistência com outro ERP
+                ultNsu = respUltNsu;
                 config.setUltNsu(ultNsu);
                 config.setMaxNsu(maxNsu);
+                if (CSTAT_CONSUMO_INDEVIDO.equals(cstat)) {
+                    log.info("SEFAZ 656 recebido. NSU para próxima tentativa: {} (salvo em DB). Aguardando backoff.", ultNsu);
+                }
                 break;
             }
         }
