@@ -28,18 +28,30 @@ public class SefazDistributionService {
     private static final String CSTAT_DOCUMENTOS = "138";
     /** cStat 656 = consumo indevido (bloqueio temporário). */
     private static final String CSTAT_CONSUMO_INDEVIDO = "656";
-    /** Teto de chamadas por execução, evita laços longos e consumo excessivo. */
-    private static final int MAX_CONSULTAS = 50;
+    /**
+     * Teto de chamadas por execução. A SEFAZ limita ~20 consultas/hora por CNPJ;
+     * como o intervalo mínimo garante execuções a ≥1h de distância, manter ≤20 por
+     * execução respeita o teto horário mesmo durante a carga inicial de backlog.
+     */
+    private static final int MAX_CONSULTAS = 20;
     /** Intervalo mínimo entre consultas exigido pela SEFAZ (NT 2014.002) sem novidades. */
     private static final Duration INTERVALO_MINIMO = Duration.ofMinutes(65);
     /** Cadência normal de sincronização. */
     private static final Duration CADENCIA = Duration.ofHours(6);
+    /** Backoff base após 656; dobra a cada 656 consecutivo até o teto. */
+    private static final Duration BACKOFF_BASE = Duration.ofHours(1);
+    /** Teto do backoff (a SEFAZ pode suspender por até 12h em reincidência). */
+    private static final Duration BACKOFF_MAX = Duration.ofHours(12);
 
     private final CompanyConfigService companyConfigService;
     private final CompanyConfigRepository companyConfigRepository;
     private final SefazClient sefazClient;
     private final DistribuicaoProcessor distribuicaoProcessor;
     private final SefazLogService sefazLogService;
+
+    /** Evita execuções simultâneas (manual + agendada) sobre o mesmo certificado. */
+    private final java.util.concurrent.atomic.AtomicBoolean emExecucao =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * Consulta a SEFAZ repetidamente até alcançar o maxNSU (ou o teto de chamadas),
@@ -54,7 +66,19 @@ public class SefazDistributionService {
                 "Intervalo mínimo da SEFAZ ainda não decorrido. Próxima consulta liberada em " + config.getProximaConsultaPermitida(),
                 config.getUltNsu(), config.getMaxNsu(), 0, 0);
         }
+        if (!emExecucao.compareAndSet(false, true)) {
+            return new SyncResultResponse("em-execucao",
+                "Já existe uma sincronização em andamento.",
+                config.getUltNsu(), config.getMaxNsu(), 0, 0);
+        }
+        try {
+            return executar(config);
+        } finally {
+            emExecucao.set(false);
+        }
+    }
 
+    private SyncResultResponse executar(CompanyConfig config) {
         String ultNsu = config.getUltNsu();
         String maxNsu = config.getMaxNsu();
         String cstat = null;
@@ -112,17 +136,40 @@ public class SefazDistributionService {
 
     /**
      * Define o intervalo mínimo da SEFAZ e quando a próxima sincronização deve ocorrer.
-     * Em condições normais usa a cadência de 6h; após 656 ou quando ainda há documentos
-     * pendentes, reagenda logo após o intervalo mínimo (≈ 1 min depois do cooldown).
+     * <ul>
+     *   <li>656 (consumo indevido): backoff exponencial (1h, 2h, 4h… até 12h) por reincidência;</li>
+     *   <li>backlog pendente (atingiu o teto de consultas): retoma logo após o intervalo mínimo;</li>
+     *   <li>caso normal (137 ou nada pendente): cadência de 6h.</li>
+     * </ul>
      */
     private void agendarProxima(CompanyConfig config, String cstat, boolean limiteAtingido) {
         Instant agora = Instant.now();
+        if (CSTAT_CONSUMO_INDEVIDO.equals(cstat)) {
+            int bloqueios = config.getBloqueiosConsecutivos() + 1;
+            config.setBloqueiosConsecutivos(bloqueios);
+            Duration espera = backoff(bloqueios);
+            config.setProximaConsultaPermitida(agora.plus(espera));
+            config.setProximaSincronizacao(agora.plus(espera).plus(Duration.ofMinutes(1)));
+            return;
+        }
+
+        // Qualquer resposta válida (137/138) zera o backoff.
+        config.setBloqueiosConsecutivos(0);
         config.setProximaConsultaPermitida(agora.plus(INTERVALO_MINIMO));
-        if (CSTAT_CONSUMO_INDEVIDO.equals(cstat) || limiteAtingido) {
+        if (limiteAtingido) {
             config.setProximaSincronizacao(agora.plus(INTERVALO_MINIMO).plus(Duration.ofMinutes(1)));
         } else {
             config.setProximaSincronizacao(agora.plus(CADENCIA));
         }
+    }
+
+    /** Backoff exponencial: BASE × 2^(n-1), limitado a {@link #BACKOFF_MAX}. */
+    private Duration backoff(int bloqueiosConsecutivos) {
+        int expoente = Math.max(0, bloqueiosConsecutivos - 1);
+        // limita o deslocamento para não estourar o long antes de aplicar o teto
+        long fator = expoente >= 5 ? 32L : (1L << expoente);
+        Duration espera = BACKOFF_BASE.multipliedBy(fator);
+        return espera.compareTo(BACKOFF_MAX) > 0 ? BACKOFF_MAX : espera;
     }
 
     private int compararNsu(String a, String b) {

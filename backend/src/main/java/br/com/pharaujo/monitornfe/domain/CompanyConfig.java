@@ -56,6 +56,10 @@ public class CompanyConfig extends AuditableEntity {
     @Column(name = "proxima_sincronizacao")
     private java.time.Instant proximaSincronizacao;
 
+    /** Rejeições 656 (consumo indevido) consecutivas, para backoff exponencial. */
+    @Column(name = "bloqueios_consecutivos", nullable = false)
+    private int bloqueiosConsecutivos = 0;
+
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "certificate_id")
     private CertificateRecord certificate;
