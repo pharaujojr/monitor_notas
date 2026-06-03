@@ -7,12 +7,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+/**
+ * Garante que exista uma configuração inicial de empresa no primeiro start.
+ * Não semeia notas de exemplo — os documentos passam a vir da SEFAZ via DistribuicaoDFe.
+ */
 @Component
 @RequiredArgsConstructor
 public class SampleDataInitializer implements CommandLineRunner {
 
     private final CompanyConfigService companyConfigService;
-    private final SefazDistributionService sefazDistributionService;
 
     @Override
     public void run(String... args) {
@@ -25,6 +28,5 @@ public class SampleDataInitializer implements CommandLineRunner {
                 CompanyStatus.ATIVO
             ));
         }
-        sefazDistributionService.bootstrapSampleData();
     }
 }
