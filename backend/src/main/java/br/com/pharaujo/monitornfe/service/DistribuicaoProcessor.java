@@ -148,9 +148,30 @@ public class DistribuicaoProcessor {
         String xEvento = defaultText(text(doc, "xEvento"), "Evento");
         String nProt = text(doc, "nProt");
         OffsetDateTime occurredAt = parseOffset(text(doc, "dhEvento"));
-        noteLifecycleService.registerEvent(note.get(), tpEvento, xEvento, nProt, occurredAt,
+        NfeNote nota = note.get();
+        noteLifecycleService.registerEvent(nota, tpEvento, xEvento, nProt, occurredAt,
             "Evento recebido via DistribuicaoDFe");
+
+        // Reflete o status de manifestação (a manifestação em si é feita em outra aplicação).
+        String descricao = descricaoManifestacao(tpEvento);
+        if (descricao != null) {
+            nota.setManifestacaoStatus(tpEvento);
+            nota.setManifestacaoDescricao(descricao);
+            nota.setManifestacaoEventoAt(occurredAt != null ? occurredAt : OffsetDateTime.now());
+            noteLifecycleService.save(nota);
+        }
         return true;
+    }
+
+    /** Eventos de manifestação do destinatário (NT 2012.002); null se não for manifestação. */
+    private String descricaoManifestacao(String tpEvento) {
+        return switch (tpEvento) {
+            case "210200" -> "Confirmação da Operação";
+            case "210210" -> "Ciência da Operação";
+            case "210220" -> "Desconhecimento da Operação";
+            case "210240" -> "Operação não Realizada";
+            default -> null;
+        };
     }
 
     // -------- helpers --------

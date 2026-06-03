@@ -48,6 +48,14 @@ public class CompanyConfig extends AuditableEntity {
     @Column(name = "max_nsu", nullable = false, length = 20)
     private String maxNsu = "0";
 
+    /** Momento a partir do qual uma nova consulta à SEFAZ é permitida (intervalo mínimo). */
+    @Column(name = "proxima_consulta_permitida")
+    private java.time.Instant proximaConsultaPermitida;
+
+    /** Próxima sincronização agendada (cadência de 6h). */
+    @Column(name = "proxima_sincronizacao")
+    private java.time.Instant proximaSincronizacao;
+
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "certificate_id")
     private CertificateRecord certificate;

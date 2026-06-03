@@ -50,6 +50,34 @@ public class StorageService {
         return new FileSystemResource(path);
     }
 
+    /** Armazena um anexo de comentário em disco, organizado por nota. */
+    public String storeCommentAttachment(Long noteId, String originalFilename, byte[] content) {
+        try {
+            Path dir = Path.of(appProperties.getStoragePath(), "comments", String.valueOf(noteId))
+                .toAbsolutePath().normalize();
+            Files.createDirectories(dir);
+            String safe = (originalFilename == null || originalFilename.isBlank() ? "arquivo" : originalFilename)
+                .replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path file = dir.resolve(UUID.randomUUID() + "-" + safe);
+            Files.write(file, content);
+            return file.toString();
+        } catch (IOException exception) {
+            throw new BadRequestException("Nao foi possivel armazenar o anexo do comentario");
+        }
+    }
+
+    /** Remove um arquivo do disco; silencioso se já não existir. */
+    public void deleteQuietly(String filePath) {
+        if (filePath == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(filePath).toAbsolutePath().normalize());
+        } catch (IOException ignored) {
+            // melhor esforço: a remoção do registro no banco é a fonte de verdade
+        }
+    }
+
     private String writeForNote(NfeNote note, String folder, String extension, byte[] content) {
         try {
             Path path = Path.of(

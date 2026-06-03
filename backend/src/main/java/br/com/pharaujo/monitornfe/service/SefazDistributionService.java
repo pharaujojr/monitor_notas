@@ -1,7 +1,6 @@
 package br.com.pharaujo.monitornfe.service;
 
 import br.com.pharaujo.monitornfe.domain.CompanyConfig;
-import br.com.pharaujo.monitornfe.domain.CompanyStatus;
 import br.com.pharaujo.monitornfe.repository.CompanyConfigRepository;
 import br.com.pharaujo.monitornfe.web.dto.SyncResultResponse;
 import br.com.swconsultoria.nfe.schema.retdistdfeint.RetDistDFeInt;
@@ -9,13 +8,16 @@ import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orquestra a sincronização com a SEFAZ (NFeDistribuicaoDFe), iterando pelo NSU
  * a partir do último consumido até esgotar os documentos disponíveis.
+ *
+ * O agendamento é totalmente automático e persistido no banco (sobrevive a restarts):
+ * um ticker verifica a cada minuto se já é hora de consultar, respeitando o intervalo
+ * mínimo da SEFAZ (656/consumo indevido) e a cadência configurada de 6 horas.
  */
 @Slf4j
 @Service
@@ -24,14 +26,14 @@ public class SefazDistributionService {
 
     /** cStat 138 = documento(s) localizado(s). */
     private static final String CSTAT_DOCUMENTOS = "138";
-    /** cStat 137 = nenhum documento localizado. */
-    private static final String CSTAT_NADA = "137";
     /** cStat 656 = consumo indevido (bloqueio temporário). */
     private static final String CSTAT_CONSUMO_INDEVIDO = "656";
     /** Teto de chamadas por execução, evita laços longos e consumo excessivo. */
     private static final int MAX_CONSULTAS = 50;
-    /** Intervalo mínimo entre consultas exigido pela SEFAZ (NT 2014.002) quando não há novidades. */
+    /** Intervalo mínimo entre consultas exigido pela SEFAZ (NT 2014.002) sem novidades. */
     private static final Duration INTERVALO_MINIMO = Duration.ofMinutes(65);
+    /** Cadência normal de sincronização. */
+    private static final Duration CADENCIA = Duration.ofHours(6);
 
     private final CompanyConfigService companyConfigService;
     private final CompanyConfigRepository companyConfigRepository;
@@ -39,34 +41,17 @@ public class SefazDistributionService {
     private final DistribuicaoProcessor distribuicaoProcessor;
     private final SefazLogService sefazLogService;
 
-    /** Momento a partir do qual uma nova consulta é permitida (respeita o intervalo da SEFAZ). */
-    private volatile Instant proximaConsultaPermitida = Instant.EPOCH;
-
-    @Scheduled(cron = "${app.scheduler-distribution-cron}")
-    public void runScheduled() {
-        try {
-            CompanyConfig config = companyConfigService.getRequiredEntity();
-            if (config.getStatus() != CompanyStatus.ATIVO) {
-                log.debug("Empresa inativa, sincronização agendada ignorada.");
-                return;
-            }
-            sincronizar();
-        } catch (Exception exception) {
-            log.warn("Falha ao executar monitoramento agendado: {}", exception.getMessage());
-        }
-    }
-
     /**
      * Consulta a SEFAZ repetidamente até alcançar o maxNSU (ou o teto de chamadas),
-     * processando cada documento e persistindo o avanço do NSU na empresa.
+     * processando cada documento e persistindo o avanço do NSU e o próximo agendamento.
      */
     @Transactional
     public SyncResultResponse sincronizar() {
         CompanyConfig config = companyConfigService.getRequiredEntity();
         Instant agora = Instant.now();
-        if (agora.isBefore(proximaConsultaPermitida)) {
+        if (config.getProximaConsultaPermitida() != null && agora.isBefore(config.getProximaConsultaPermitida())) {
             return new SyncResultResponse("cooldown",
-                "Intervalo mínimo da SEFAZ ainda não decorrido. Próxima consulta liberada às " + proximaConsultaPermitida,
+                "Intervalo mínimo da SEFAZ ainda não decorrido. Próxima consulta liberada em " + config.getProximaConsultaPermitida(),
                 config.getUltNsu(), config.getMaxNsu(), 0, 0);
         }
 
@@ -99,37 +84,45 @@ public class SefazDistributionService {
                     }
                 }
                 ultNsu = respUltNsu;
-                persistirNsu(config, ultNsu, maxNsu);
+                config.setUltNsu(ultNsu);
+                config.setMaxNsu(maxNsu);
 
                 if (compararNsu(ultNsu, maxNsu) >= 0) {
                     break; // alcançou o último documento disponível
                 }
                 if (consultas >= MAX_CONSULTAS) {
-                    limiteAtingido = true; // ainda há documentos; pode retomar antes de 1h
+                    limiteAtingido = true; // ainda há documentos; retomar logo após o intervalo
                 }
             } else {
-                // 137 (nada novo), 656 (consumo indevido) ou erro: registra avanço e para
-                persistirNsu(config, ultNsu, maxNsu);
+                // 137 (nada novo), 656 (consumo indevido) ou erro: para o laço
+                config.setUltNsu(ultNsu);
+                config.setMaxNsu(maxNsu);
                 break;
             }
         }
 
-        // Respeita o intervalo mínimo da SEFAZ: só dispensa o cooldown se paramos por
-        // ter batido o teto de consultas ainda havendo documentos pendentes.
-        if (!limiteAtingido) {
-            proximaConsultaPermitida = Instant.now().plus(INTERVALO_MINIMO);
-        }
-        if (CSTAT_CONSUMO_INDEVIDO.equals(cstat)) {
-            log.warn("SEFAZ retornou 656 (consumo indevido). Próxima consulta liberada às {}", proximaConsultaPermitida);
-        }
+        agendarProxima(config, cstat, limiteAtingido);
+        companyConfigRepository.save(config);
 
+        if (CSTAT_CONSUMO_INDEVIDO.equals(cstat)) {
+            log.warn("SEFAZ retornou 656 (consumo indevido). Próxima consulta liberada em {}", config.getProximaConsultaPermitida());
+        }
         return new SyncResultResponse(cstat, motivo, ultNsu, maxNsu, processados, consultas);
     }
 
-    private void persistirNsu(CompanyConfig config, String ultNsu, String maxNsu) {
-        config.setUltNsu(ultNsu);
-        config.setMaxNsu(maxNsu);
-        companyConfigRepository.save(config);
+    /**
+     * Define o intervalo mínimo da SEFAZ e quando a próxima sincronização deve ocorrer.
+     * Em condições normais usa a cadência de 6h; após 656 ou quando ainda há documentos
+     * pendentes, reagenda logo após o intervalo mínimo (≈ 1 min depois do cooldown).
+     */
+    private void agendarProxima(CompanyConfig config, String cstat, boolean limiteAtingido) {
+        Instant agora = Instant.now();
+        config.setProximaConsultaPermitida(agora.plus(INTERVALO_MINIMO));
+        if (CSTAT_CONSUMO_INDEVIDO.equals(cstat) || limiteAtingido) {
+            config.setProximaSincronizacao(agora.plus(INTERVALO_MINIMO).plus(Duration.ofMinutes(1)));
+        } else {
+            config.setProximaSincronizacao(agora.plus(CADENCIA));
+        }
     }
 
     private int compararNsu(String a, String b) {

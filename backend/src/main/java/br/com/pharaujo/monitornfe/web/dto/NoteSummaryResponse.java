@@ -11,6 +11,8 @@ public record NoteSummaryResponse(
     String emitenteCnpj,
     LocalDateTime dataEmissao,
     BigDecimal valorTotal,
-    NfeStatus status
+    NfeStatus status,
+    String manifestacaoStatus,
+    String manifestacaoDescricao
 ) {
 }

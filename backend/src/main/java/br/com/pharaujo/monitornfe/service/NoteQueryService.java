@@ -63,6 +63,9 @@ public class NoteQueryService {
             note.getDataEmissao(),
             note.getValorTotal(),
             note.getStatus(),
+            note.getManifestacaoStatus(),
+            note.getManifestacaoDescricao(),
+            note.getManifestacaoEventoAt(),
             note.getXmlStoragePath(),
             note.getPdfStoragePath(),
             note.getXmlDownloadedAt(),
@@ -80,7 +83,9 @@ public class NoteQueryService {
             note.getEmitenteCnpj(),
             note.getDataEmissao(),
             note.getValorTotal(),
-            note.getStatus()
+            note.getStatus(),
+            note.getManifestacaoStatus(),
+            note.getManifestacaoDescricao()
         );
     }
 

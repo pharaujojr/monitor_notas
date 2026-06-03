@@ -70,4 +70,15 @@ public class NfeNote extends AuditableEntity {
 
     @Column(name = "pdf_generated_at")
     private OffsetDateTime pdfGeneratedAt;
+
+    /** Código do evento de manifestação (210200/210210/210220/210240) refletido a partir da SEFAZ. */
+    @Column(name = "manifestacao_status", length = 40)
+    private String manifestacaoStatus;
+
+    /** Descrição legível da manifestação. */
+    @Column(name = "manifestacao_descricao", length = 120)
+    private String manifestacaoDescricao;
+
+    @Column(name = "manifestacao_evento_at")
+    private OffsetDateTime manifestacaoEventoAt;
 }
