@@ -24,7 +24,7 @@ public class AppProperties {
     @NotBlank
     private String schedulerDistributionCron;
 
-    private boolean erpXmlImportEnabled = true;
+    private boolean erpXmlImportEnabled = false;
 
     @NotBlank
     private String erpXmlImportPath;
@@ -32,7 +32,7 @@ public class AppProperties {
     @NotBlank
     private String erpXmlImportCron;
 
-    private boolean sefazFallbackEnabled = false;
+    private boolean sefazFallbackEnabled = true;
 
-    private int sefazMaxConsultasPorExecucao = 2;
+    private int sefazMaxConsultasPorExecucao = 1;
 }

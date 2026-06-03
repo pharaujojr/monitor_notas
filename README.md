@@ -1,6 +1,6 @@
 # monitor-nfe-entrada
 
-Projeto self-hosted para monitoramento de NF-e de entrada para um CNPJ específico. O sistema prioriza XMLs exportados por um ERP externo, registra eventos, acompanha manifestação externa, baixa XML quando disponível e gera DANFE/PDF localmente.
+Projeto self-hosted para monitoramento de NF-e de entrada para um CNPJ específico. O sistema registra eventos, acompanha manifestação externa, baixa XML quando disponível e gera DANFE/PDF localmente.
 
 ## Stack
 
@@ -34,12 +34,14 @@ Projeto self-hosted para monitoramento de NF-e de entrada para um CNPJ específi
 
 ## Coexistência com outro ERP
 
-Quando outro ERP usa o mesmo CNPJ/certificado, os dois sistemas dividem o limite de consumo da SEFAZ. Para evitar rejeição `656 - Consumo Indevido`, o modo recomendado é:
+Quando outro ERP usa o mesmo CNPJ/certificado, os dois sistemas dividem o limite de consumo da SEFAZ. Se o outro ERP fica em outro ambiente e não disponibiliza XML para leitura local, o modo recomendado é coexistência defensiva:
 
-- deixar `ERP_XML_IMPORT_ENABLED=true`
-- apontar `ERP_XML_HOST_PATH` para a pasta do TrueNAS onde o ERP grava XMLs
-- manter `SEFAZ_FALLBACK_ENABLED=false`
-- habilitar `SEFAZ_FALLBACK_ENABLED=true` apenas em janela controlada, com `SEFAZ_MAX_CONSULTAS_POR_EXECUCAO=1` ou `2`
+- deixar `ERP_XML_IMPORT_ENABLED=false`
+- manter `SEFAZ_FALLBACK_ENABLED=true`
+- usar `SEFAZ_MAX_CONSULTAS_POR_EXECUCAO=1`
+- deixar o agendamento persistido controlar cooldown, backoff e jitter
+
+O importador por pasta continua disponível para cenários em que algum ERP grave XMLs em um diretório acessível pelo TrueNAS.
 
 ## Subida local
 
@@ -57,10 +59,10 @@ Backend: `http://localhost:8080`
 
 ## Observações do MVP
 
-- A integração com SEFAZ fica em modo fallback defensivo por padrão
-- O caminho principal de entrada de XML é o diretório configurado em `ERP_XML_IMPORT_PATH`
+- A integração com SEFAZ roda em modo defensivo por padrão
+- O importador por diretório é opcional e fica desligado por padrão
 - O MVP não manifesta NF-e
-- O job agendado evita consultar a SEFAZ quando `SEFAZ_FALLBACK_ENABLED=false`
+- O job agendado respeita `ultNSU`, cooldown, backoff exponencial no `656` e jitter para reduzir colisão com outro ERP
 - O projeto sobe com dados de exemplo para facilitar validação inicial
 
 ## Próximos passos recomendados

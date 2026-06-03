@@ -7,6 +7,7 @@ import br.com.pharaujo.monitornfe.web.dto.SyncResultResponse;
 import br.com.swconsultoria.nfe.schema.retdistdfeint.RetDistDFeInt;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,9 @@ public class SefazDistributionService {
     private static final Duration BACKOFF_BASE = Duration.ofHours(1);
     /** Teto do backoff (a SEFAZ pode suspender por até 12h em reincidência). */
     private static final Duration BACKOFF_MAX = Duration.ofHours(12);
+    /** Deslocamento aleatório para reduzir colisão com outro ERP em agenda fixa. */
+    private static final Duration JITTER_MIN = Duration.ofMinutes(7);
+    private static final Duration JITTER_MAX = Duration.ofMinutes(43);
 
     private final CompanyConfigService companyConfigService;
     private final CompanyConfigRepository companyConfigRepository;
@@ -152,7 +156,7 @@ public class SefazDistributionService {
             config.setBloqueiosConsecutivos(bloqueios);
             Duration espera = backoff(bloqueios);
             config.setProximaConsultaPermitida(agora.plus(espera));
-            config.setProximaSincronizacao(agora.plus(espera).plus(Duration.ofMinutes(1)));
+            config.setProximaSincronizacao(agora.plus(espera).plus(jitter()));
             return;
         }
 
@@ -160,9 +164,9 @@ public class SefazDistributionService {
         config.setBloqueiosConsecutivos(0);
         config.setProximaConsultaPermitida(agora.plus(INTERVALO_MINIMO));
         if (limiteAtingido) {
-            config.setProximaSincronizacao(agora.plus(INTERVALO_MINIMO).plus(Duration.ofMinutes(1)));
+            config.setProximaSincronizacao(agora.plus(INTERVALO_MINIMO).plus(jitter()));
         } else {
-            config.setProximaSincronizacao(agora.plus(CADENCIA));
+            config.setProximaSincronizacao(agora.plus(CADENCIA).plus(jitter()));
         }
     }
 
@@ -173,6 +177,12 @@ public class SefazDistributionService {
         long fator = expoente >= 5 ? 32L : (1L << expoente);
         Duration espera = BACKOFF_BASE.multipliedBy(fator);
         return espera.compareTo(BACKOFF_MAX) > 0 ? BACKOFF_MAX : espera;
+    }
+
+    private Duration jitter() {
+        long minSeconds = JITTER_MIN.toSeconds();
+        long maxSeconds = JITTER_MAX.toSeconds();
+        return Duration.ofSeconds(ThreadLocalRandom.current().nextLong(minSeconds, maxSeconds + 1));
     }
 
     private int compararNsu(String a, String b) {
