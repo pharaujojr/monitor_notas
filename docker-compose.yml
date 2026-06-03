@@ -31,8 +31,14 @@ services:
       CERT_STORAGE_PATH: ${CERT_STORAGE_PATH}
       CERT_PASSWORD: ${CERT_PASSWORD}
       SEFAZ_AMBIENTE: ${SEFAZ_AMBIENTE}
+      ERP_XML_IMPORT_ENABLED: ${ERP_XML_IMPORT_ENABLED:-true}
+      ERP_XML_IMPORT_PATH: ${ERP_XML_IMPORT_PATH:-/data/erp-xml}
+      ERP_XML_IMPORT_CRON: ${ERP_XML_IMPORT_CRON:-0 */5 * * * *}
+      SEFAZ_FALLBACK_ENABLED: ${SEFAZ_FALLBACK_ENABLED:-false}
+      SEFAZ_MAX_CONSULTAS_POR_EXECUCAO: ${SEFAZ_MAX_CONSULTAS_POR_EXECUCAO:-2}
     volumes:
       - app_storage:${APP_STORAGE_PATH}
+      - ${ERP_XML_HOST_PATH:-./erp-xml-inbox}:${ERP_XML_IMPORT_PATH:-/data/erp-xml}:ro
     depends_on:
       postgres:
         condition: service_healthy

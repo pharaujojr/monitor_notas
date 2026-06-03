@@ -4,6 +4,7 @@
 .deploy/
 .DS_Store
 storage/
+erp-xml-inbox/
 backend/.gradle/
 backend/build/
 frontend/dist/

@@ -55,7 +55,7 @@ public class DistribuicaoProcessor {
             return processarResumo(company, nsu, doc);
         }
         if (schema.startsWith("procNFe")) {
-            return processarNotaCompleta(company, nsu, doc, xml);
+            return processarNotaCompleta(company, nsu, doc, xml, "DistribuicaoDFe");
         }
         if (schema.startsWith("resEvento") || schema.startsWith("procEventoNFe")) {
             return processarEvento(doc);
@@ -63,6 +63,18 @@ public class DistribuicaoProcessor {
         // resInfCadastro e outros schemas não são relevantes para o monitoramento de entrada
         log.debug("Schema ignorado: {}", schema);
         return false;
+    }
+
+    @Transactional
+    public boolean processarXmlCompleto(CompanyConfig company, String nsu, String xml, String origem) {
+        if (xml == null || xml.isBlank()) {
+            return false;
+        }
+        Document doc = parse(xml);
+        if (doc == null) {
+            return false;
+        }
+        return processarNotaCompleta(company, nsu, doc, xml, origem);
     }
 
     private boolean processarResumo(CompanyConfig company, String nsu, Document doc) {
@@ -88,7 +100,7 @@ public class DistribuicaoProcessor {
         return true;
     }
 
-    private boolean processarNotaCompleta(CompanyConfig company, String nsu, Document doc, String xml) {
+    private boolean processarNotaCompleta(CompanyConfig company, String nsu, Document doc, String xml, String origem) {
         Element infNFe = firstElement(doc, "infNFe");
         if (infNFe == null) {
             return false;
@@ -98,6 +110,11 @@ public class DistribuicaoProcessor {
         Element dest = firstElement(doc, "dest");
         Element ide = firstElement(doc, "ide");
         Element icmsTot = firstElement(doc, "ICMSTot");
+        String destinatarioCnpj = defaultText(childText(dest, "CNPJ"), company.getCnpj());
+        if (!company.getCnpj().equals(destinatarioCnpj)) {
+            log.debug("XML ignorado: destinatario {} diferente do CNPJ monitorado {}", destinatarioCnpj, company.getCnpj());
+            return false;
+        }
 
         Optional<NfeNote> existing = nfeNoteRepository.findByChaveAcesso(chave);
         NfeNote note = existing.orElseGet(NfeNote::new);
@@ -109,7 +126,7 @@ public class DistribuicaoProcessor {
         note.setModelo(defaultText(childText(ide, "mod"), "55"));
         note.setEmitenteCnpj(defaultText(childText(emit, "CNPJ"), note.getEmitenteCnpj()));
         note.setEmitenteNome(defaultText(childText(emit, "xNome"), note.getEmitenteNome()));
-        note.setDestinatarioCnpj(defaultText(childText(dest, "CNPJ"), company.getCnpj()));
+        note.setDestinatarioCnpj(destinatarioCnpj);
         note.setDataEmissao(parseDateTime(childText(ide, "dhEmi")));
         note.setValorTotal(parseValor(childText(icmsTot, "vNF")));
         if (note.getStatus() == null) {
@@ -120,7 +137,7 @@ public class DistribuicaoProcessor {
         // armazena XML completo
         note.setXmlStoragePath(storageService.storeXml(note, xml));
         note.setXmlDownloadedAt(OffsetDateTime.now());
-        note = noteLifecycleService.updateStatus(note, NfeStatus.XML_BAIXADO, "XML completo obtido via DistribuicaoDFe");
+        note = noteLifecycleService.updateStatus(note, NfeStatus.XML_BAIXADO, "XML completo obtido via " + origem);
 
         // gera PDF (DANFE simplificada) a partir do XML
         try {

@@ -1,5 +1,6 @@
 package br.com.pharaujo.monitornfe.service;
 
+import br.com.pharaujo.monitornfe.config.AppProperties;
 import br.com.pharaujo.monitornfe.domain.CompanyConfig;
 import br.com.pharaujo.monitornfe.domain.CompanyStatus;
 import java.time.Instant;
@@ -24,10 +25,14 @@ public class SefazScheduler {
 
     private final CompanyConfigService companyConfigService;
     private final SefazDistributionService sefazDistributionService;
+    private final AppProperties appProperties;
 
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     public void tick() {
         try {
+            if (!appProperties.isSefazFallbackEnabled()) {
+                return;
+            }
             CompanyConfig config = companyConfigService.getCurrent() == null ? null : companyConfigService.getRequiredEntity();
             if (config == null || config.getStatus() != CompanyStatus.ATIVO) {
                 return;

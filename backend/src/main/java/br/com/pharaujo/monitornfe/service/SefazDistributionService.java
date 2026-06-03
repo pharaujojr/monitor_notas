@@ -1,6 +1,7 @@
 package br.com.pharaujo.monitornfe.service;
 
 import br.com.pharaujo.monitornfe.domain.CompanyConfig;
+import br.com.pharaujo.monitornfe.config.AppProperties;
 import br.com.pharaujo.monitornfe.repository.CompanyConfigRepository;
 import br.com.pharaujo.monitornfe.web.dto.SyncResultResponse;
 import br.com.swconsultoria.nfe.schema.retdistdfeint.RetDistDFeInt;
@@ -28,12 +29,6 @@ public class SefazDistributionService {
     private static final String CSTAT_DOCUMENTOS = "138";
     /** cStat 656 = consumo indevido (bloqueio temporário). */
     private static final String CSTAT_CONSUMO_INDEVIDO = "656";
-    /**
-     * Teto de chamadas por execução. A SEFAZ limita ~20 consultas/hora por CNPJ;
-     * como o intervalo mínimo garante execuções a ≥1h de distância, manter ≤20 por
-     * execução respeita o teto horário mesmo durante a carga inicial de backlog.
-     */
-    private static final int MAX_CONSULTAS = 20;
     /** Intervalo mínimo entre consultas exigido pela SEFAZ (NT 2014.002) sem novidades. */
     private static final Duration INTERVALO_MINIMO = Duration.ofMinutes(65);
     /** Cadência normal de sincronização. */
@@ -45,6 +40,7 @@ public class SefazDistributionService {
 
     private final CompanyConfigService companyConfigService;
     private final CompanyConfigRepository companyConfigRepository;
+    private final AppProperties appProperties;
     private final SefazClient sefazClient;
     private final DistribuicaoProcessor distribuicaoProcessor;
     private final SefazLogService sefazLogService;
@@ -59,6 +55,12 @@ public class SefazDistributionService {
      */
     @Transactional
     public SyncResultResponse sincronizar() {
+        if (!appProperties.isSefazFallbackEnabled()) {
+            CompanyConfig config = companyConfigService.getRequiredEntity();
+            return new SyncResultResponse("disabled",
+                "Fallback SEFAZ desativado. Importacao via pasta do ERP e a fonte primaria.",
+                config.getUltNsu(), config.getMaxNsu(), 0, 0);
+        }
         CompanyConfig config = companyConfigService.getRequiredEntity();
         Instant agora = Instant.now();
         if (config.getProximaConsultaPermitida() != null && agora.isBefore(config.getProximaConsultaPermitida())) {
@@ -87,7 +89,8 @@ public class SefazDistributionService {
         int consultas = 0;
         boolean limiteAtingido = false;
 
-        while (consultas < MAX_CONSULTAS) {
+        int maxConsultas = Math.max(1, Math.min(appProperties.getSefazMaxConsultasPorExecucao(), 20));
+        while (consultas < maxConsultas) {
             RetDistDFeInt ret = sefazClient.consultarPorNsu(config, ultNsu);
             consultas++;
             cstat = ret.getCStat();
@@ -114,7 +117,7 @@ public class SefazDistributionService {
                 if (compararNsu(ultNsu, maxNsu) >= 0) {
                     break; // alcançou o último documento disponível
                 }
-                if (consultas >= MAX_CONSULTAS) {
+                if (consultas >= maxConsultas) {
                     limiteAtingido = true; // ainda há documentos; retomar logo após o intervalo
                 }
             } else {

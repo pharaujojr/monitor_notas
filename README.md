@@ -1,6 +1,6 @@
 # monitor-nfe-entrada
 
-Projeto self-hosted para monitoramento de NF-e de entrada para um CNPJ específico. O sistema consulta a distribuição DF-e, registra eventos, acompanha manifestação externa, baixa XML quando disponível e gera DANFE/PDF localmente.
+Projeto self-hosted para monitoramento de NF-e de entrada para um CNPJ específico. O sistema prioriza XMLs exportados por um ERP externo, registra eventos, acompanha manifestação externa, baixa XML quando disponível e gera DANFE/PDF localmente.
 
 ## Stack
 
@@ -30,6 +30,16 @@ Projeto self-hosted para monitoramento de NF-e de entrada para um CNPJ específi
 - `GET /api/logs`
 - `POST /api/exports/xml`
 - `POST /api/exports/pdf`
+- `POST /api/external-xml/importar`
+
+## Coexistência com outro ERP
+
+Quando outro ERP usa o mesmo CNPJ/certificado, os dois sistemas dividem o limite de consumo da SEFAZ. Para evitar rejeição `656 - Consumo Indevido`, o modo recomendado é:
+
+- deixar `ERP_XML_IMPORT_ENABLED=true`
+- apontar `ERP_XML_HOST_PATH` para a pasta do TrueNAS onde o ERP grava XMLs
+- manter `SEFAZ_FALLBACK_ENABLED=false`
+- habilitar `SEFAZ_FALLBACK_ENABLED=true` apenas em janela controlada, com `SEFAZ_MAX_CONSULTAS_POR_EXECUCAO=1` ou `2`
 
 ## Subida local
 
@@ -47,9 +57,10 @@ Backend: `http://localhost:8080`
 
 ## Observações do MVP
 
-- A integração real com SEFAZ foi abstraída em `SefazDistributionService`
+- A integração com SEFAZ fica em modo fallback defensivo por padrão
+- O caminho principal de entrada de XML é o diretório configurado em `ERP_XML_IMPORT_PATH`
 - O MVP não manifesta NF-e
-- O job agendado registra consultas e mantém a arquitetura pronta para a implementação do `distNSU`
+- O job agendado evita consultar a SEFAZ quando `SEFAZ_FALLBACK_ENABLED=false`
 - O projeto sobe com dados de exemplo para facilitar validação inicial
 
 ## Próximos passos recomendados
