@@ -34,5 +34,5 @@ public class AppProperties {
 
     private boolean sefazFallbackEnabled = true;
 
-    private int sefazMaxConsultasPorExecucao = 1;
+    private int sefazMaxConsultasPorExecucao = 18;
 }

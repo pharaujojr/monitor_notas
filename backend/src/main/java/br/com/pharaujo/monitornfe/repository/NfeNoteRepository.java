@@ -45,4 +45,6 @@ public interface NfeNoteRepository extends JpaRepository<NfeNote, Long> {
     long countByStatus(NfeStatus status);
 
     List<NfeNote> findTop10ByOrderByDataEmissaoDesc();
+
+    List<NfeNote> findByXmlStoragePathIsNotNull();
 }

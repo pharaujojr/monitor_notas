@@ -340,6 +340,7 @@ function App() {
                 <tr>
                   <th>Chave</th>
                   <th>Emitente</th>
+                  <th>Emissão</th>
                   <th>Valor</th>
                   <th>Status</th>
                   <th>Manifestação</th>
@@ -350,6 +351,7 @@ function App() {
                   <tr key={note.id} onClick={() => openNote(note.id)} className="clickable-row">
                     <td className="mono">{note.chaveAcesso}</td>
                     <td>{note.emitenteNome}</td>
+                    <td>{formatDateTime(note.dataEmissao)}</td>
                     <td>{formatCurrency(note.valorTotal)}</td>
                     <td><span className="status-chip">{note.status}</span></td>
                     <td>{note.manifestacaoDescricao ?? "—"}</td>
