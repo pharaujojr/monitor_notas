@@ -40,3 +40,9 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// java-nfe arrasta jaxb-core por mais de um caminho transitivo (mesmo nome de jar);
+// mantém a primeira ocorrência ao montar o fat jar.
+tasks.named('bootJar') {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
